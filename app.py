@@ -1,59 +1,51 @@
 import streamlit as st
 import os
 import openpyxl
-import time
 import tempfile
+from io import BytesIO
 
 def process_excel_files(uploaded_files):
-    """Processes uploaded Excel files and updates a progress bar."""
+    """Processes uploaded Excel files and allows users to download them."""
     if not uploaded_files:
         return "❌ No files uploaded. Please upload .xlsx files."
 
-    total_files = len(uploaded_files)
-    processed_files = 0
+    processed_files = []
 
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    for uploaded_file in uploaded_files:
+        try:
+            # Load Excel file
+            wb = openpyxl.load_workbook(uploaded_file)
+            temp_file = BytesIO()
+            wb.save(temp_file)
+            temp_file.seek(0)  # Reset pointer for reading
 
-    try:
-        for i, uploaded_file in enumerate(uploaded_files, start=1):
-            try:
-                # Save uploaded file to a temporary location
-                temp_file_path = os.path.join(tempfile.gettempdir(), uploaded_file.name)
-                with open(temp_file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            # Store processed file
+            processed_files.append((uploaded_file.name, temp_file))
+        
+        except Exception as e:
+            st.write(f"❌ Error processing {uploaded_file.name}: {e}")
 
-                # Open and re-save using openpyxl
-                wb = openpyxl.load_workbook(temp_file_path)
-                wb.save(temp_file_path)
-
-                processed_files += 1
-                status_text.text(f"✅ Processed ({i}/{total_files}): {uploaded_file.name}")
-
-            except Exception as e:
-                st.write(f"❌ Error processing {uploaded_file.name}: {e}")
-
-            progress_bar.progress(i / total_files)
-            time.sleep(0.3)
-
-    finally:
-        progress_bar.progress(1.0)
-        status_text.text("🎯 All files processed successfully!")
-
-    return f"✅ Processed {processed_files}/{total_files} Excel files successfully!"
+    return processed_files
 
 # Streamlit UI
-st.set_page_config(page_title="Excel File Processor")
-
 st.title("📂 Nielsen File Conversion")
-st.write("Upload `.xlsx` files, and the script will open and re-save them.")
+st.write("Upload `.xlsx` files, and the script will process them.")
 
-# File uploader (allows multiple file uploads)
 uploaded_files = st.file_uploader("Drop Excel files here", type=["xlsx"], accept_multiple_files=True)
 
 if st.button("Start Processing"):
     if uploaded_files:
-        result = process_excel_files(uploaded_files)
-        st.success(result)
+        processed_files = process_excel_files(uploaded_files)
+        if processed_files:
+            st.success(f"✅ Processed {len(processed_files)} files successfully!")
+
+            # Provide download links for each file
+            for file_name, file_data in processed_files:
+                st.download_button(
+                    label=f"📥 Download {file_name}",
+                    data=file_data,
+                    file_name=file_name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
     else:
         st.error("Please upload at least one Excel file.")

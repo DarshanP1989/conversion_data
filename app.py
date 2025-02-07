@@ -1,63 +1,62 @@
 import streamlit as st
 import os
-import pandas as pd
 import time
+import pandas as pd
 
-def process_uploaded_files(uploaded_files):
-    """Processes uploaded Excel files and updates a progress bar."""
-    
-    total_files = len(uploaded_files)
+# ✅ Ensure `openpyxl` is installed
+try:
+    import openpyxl
+except ImportError:
+    st.error("Missing dependency: `openpyxl`. Please install it using `pip install openpyxl`.")
+    st.stop()
+
+# ✅ Function to process Excel files
+def process_excel_files(folder_path):
+    if not os.path.exists(folder_path):
+        return "❌ Folder does not exist. Please enter a valid path."
+
+    total_files = 0
     processed_files = 0
 
+    excel_files = [os.path.join(root, file) for root, _, files in os.walk(folder_path) for file in files if file.endswith(".xlsx")]
+    total_files = len(excel_files)
+
     if total_files == 0:
-        return "❌ No files uploaded. Please upload Excel files."
+        return "🎉 No Excel files found. Exiting."
 
-    # 🔵 Create a progress bar
-    progress_bar = st.progress(0)  
-    status_text = st.empty()  
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-    try:
-        for i, uploaded_file in enumerate(uploaded_files, start=1):
-            try:
-                # Read and save the file using pandas
-                df = pd.read_excel(uploaded_file, engine="openpyxl")
-                
-                # Save processed file (optional: in a selected folder)
-                save_path = os.path.join("processed_files", uploaded_file.name)
-                os.makedirs("processed_files", exist_ok=True)  # Ensure output folder exists
-                df.to_excel(save_path, index=False, engine="openpyxl")  
+    for i, file_path in enumerate(excel_files, start=1):
+        try:
+            # ✅ Open and re-save using openpyxl
+            df = pd.read_excel(file_path, engine="openpyxl")  # Read with openpyxl
+            df.to_excel(file_path, engine="openpyxl", index=False)  # Save as new file
 
-                processed_files += 1
-                status_text.text(f"✅ Processed ({i}/{total_files}): {uploaded_file.name}")
+            processed_files += 1
+            status_text.text(f"✅ Processed ({i}/{total_files}): {file_path}")
+        except Exception as e:
+            st.write(f"❌ Error processing {file_path}: {e}")
 
-            except Exception as e:
-                st.write(f"❌ Error processing {uploaded_file.name}: {e}")
+        progress_bar.progress(i / total_files)
+        time.sleep(0.3)
 
-            # 🔄 Update progress bar
-            progress_bar.progress(i / total_files)  
-
-            time.sleep(0.3)  
-
-    except Exception as e:
-        return f"❌ Error during processing: {e}"
-
-    progress_bar.progress(1.0)  
+    progress_bar.progress(1.0)
     status_text.text("🎯 All files processed successfully!")
-
     return f"✅ Processed {processed_files}/{total_files} Excel files successfully!"
 
-# Streamlit UI
+# ✅ Streamlit UI
 st.set_page_config(page_title="Excel File Processor")
 
-st.title("📂 Nielsen File Converter")
-st.write("Upload multiple `.xls/.xlsx` files, and the script will process them.")
+st.title("📂 Excel File Processor with Progress Bar")
+st.write("Select a folder where your `.xlsx` files are stored. The script will open and re-save all files.")
 
-# 📂 File Uploader (Multiple Files)
-uploaded_files = st.file_uploader("Upload Excel Files", type=["xls", "xlsx"], accept_multiple_files=True)
+# ✅ Folder selection
+folder_path = st.text_input("Enter folder path (or use mounted folder in Streamlit Cloud):")
 
 if st.button("Start Processing"):
-    if uploaded_files:
-        result = process_uploaded_files(uploaded_files)
+    if folder_path:
+        result = process_excel_files(folder_path)
         st.success(result)
     else:
-        st.error("Please upload at least one Excel file.")
+        st.error("Please enter a valid folder path.")

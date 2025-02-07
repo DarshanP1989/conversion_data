@@ -2,73 +2,79 @@ import streamlit as st
 import os
 import openpyxl
 import time
-from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor
+import tempfile
+import zipfile
 
-def process_excel(uploaded_file):
-    """Processes a single Excel file and returns the processed file."""
-    try:
-        wb = openpyxl.load_workbook(uploaded_file)
-        temp_file = BytesIO()
-        wb.save(temp_file)
-        temp_file.seek(0)  # Reset pointer
-
-        return uploaded_file.name, temp_file, None  # Return processed file
-    except Exception as e:
-        return uploaded_file.name, None, str(e)  # Return error message
-
-def process_excel_files_parallel(uploaded_files):
-    """Processes multiple Excel files in parallel and updates the progress bar."""
+def process_excel_files(uploaded_files):
+    """Processes multiple uploaded Excel files and returns a downloadable ZIP."""
+    
     if not uploaded_files:
-        return None, "❌ No files uploaded. Please upload .xlsx files."
-
+        return "❌ No files uploaded. Please upload .xlsx files."
+    
     total_files = len(uploaded_files)
-    processed_files = []
-    errors = []
-
+    processed_files = 0
+    temp_folder = tempfile.mkdtemp()  # Temporary folder to store processed files
+    
     progress_bar = st.progress(0)
     status_text = st.empty()
+    
+    processed_files_list = []
 
-    with ThreadPoolExecutor(max_workers=4) as executor:  # Adjust max_workers as needed
-        results = list(executor.map(process_excel, uploaded_files))
+    try:
+        for i, uploaded_file in enumerate(uploaded_files, start=1):
+            try:
+                # Save uploaded file to a temporary folder
+                temp_file_path = os.path.join(temp_folder, uploaded_file.name)
+                with open(temp_file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-    for i, (file_name, file_data, error) in enumerate(results, start=1):
-        if error:
-            errors.append(f"❌ Error processing {file_name}: {error}")
-        else:
-            processed_files.append((file_name, file_data))
+                # Open and re-save using openpyxl
+                wb = openpyxl.load_workbook(temp_file_path)
+                wb.save(temp_file_path)  # Overwrite the file
 
-        progress_bar.progress(i / total_files)  # Update progress
-        status_text.text(f"✅ Processed ({i}/{total_files}): {file_name}")
+                processed_files += 1
+                processed_files_list.append(temp_file_path)
 
-    progress_bar.progress(1.0)  # Ensure progress reaches 100%
-    status_text.text("🎯 All files processed successfully!")
+                status_text.text(f"✅ Processed ({i}/{total_files}): {uploaded_file.name}")
 
-    # Display errors if any
-    if errors:
-        for error in errors:
-            st.error(error)
+            except Exception as e:
+                st.write(f"❌ Error processing {uploaded_file.name}: {e}")
 
-    return processed_files, f"✅ Processed {len(processed_files)}/{total_files} Excel files successfully!"
+            progress_bar.progress(i / total_files)
+            time.sleep(0.3)  # Small delay for visibility
+
+    finally:
+        progress_bar.progress(1.0)
+        status_text.text(f"🎯 All {processed_files}/{total_files} files processed!")
+
+    if processed_files_list:
+        # Create a ZIP file of all processed files
+        zip_path = os.path.join(tempfile.gettempdir(), "processed_files.zip")
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            for file_path in processed_files_list:
+                zipf.write(file_path, os.path.basename(file_path))
+
+        # Provide download link for ZIP
+        with open(zip_path, "rb") as zip_file:
+            st.download_button(label="📥 Download Processed Files", 
+                               data=zip_file, 
+                               file_name="processed_files.zip", 
+                               mime="application/zip")
+
+    return f"✅ Processed {processed_files}/{total_files} Excel files successfully!"
 
 # Streamlit UI
-st.title("📂 Fast Nielsen File Conversion 🚀")
-st.write("Upload `.xlsx` files, and the script will process them quickly in parallel.")
+st.set_page_config(page_title="Excel File Processor")
 
+st.title("📂 Nielsen File Conversion")
+st.write("Upload `.xlsx` files, and the script will open and re-save them.")
+
+# File uploader (allows multiple file uploads)
 uploaded_files = st.file_uploader("Drop Excel files here", type=["xlsx"], accept_multiple_files=True)
 
 if st.button("Start Processing"):
     if uploaded_files:
-        processed_files, result_message = process_excel_files_parallel(uploaded_files)
-        st.success(result_message)
-
-        # Provide download links for each processed file
-        for file_name, file_data in processed_files:
-            st.download_button(
-                label=f"📥 Download {file_name}",
-                data=file_data,
-                file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+        result = process_excel_files(uploaded_files)
+        st.success(result)
     else:
         st.error("Please upload at least one Excel file.")

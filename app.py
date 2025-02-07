@@ -55,7 +55,7 @@ def process_excel_files(folder_path):
 # Streamlit UI
 st.set_page_config(page_title="Excel File Processor")
 
-st.title("📂 Excel File Processor with Progress Bar")
+st.title("📂 Nielsen File Converter")
 st.write("Enter the folder path where your `.xls/.xlsx` files are stored. The script will open and re-save all files.")
 
 # User input for folder path

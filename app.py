@@ -4,6 +4,7 @@ import openpyxl
 import time
 import tempfile
 
+
 def process_excel_files(uploaded_files):
     """Processes uploaded Excel files and updates a progress bar."""
     if not uploaded_files:

@@ -1,12 +1,11 @@
 import streamlit as st
 import os
-import win32com.client
+import pandas as pd
 import time
-import pythoncom  # Required for COM initialization
 
 def process_excel_files(folder_path):
     """Processes all Excel files in the specified folder and updates a progress bar."""
-
+    
     if not os.path.exists(folder_path):
         return "❌ Folder does not exist. Please enter a valid path."
 
@@ -16,22 +15,13 @@ def process_excel_files(folder_path):
     excel_files = []
     for root, _, files in os.walk(folder_path):
         for file in files:
-            if file.endswith(".xlsx"):
+            if file.endswith(".xls") or file.endswith(".xlsx"):
                 total_files += 1
                 file_path = os.path.join(root, file)
                 excel_files.append(file_path)
 
     if not excel_files:
         return "🎉 No Excel files found. Exiting."
-
-    # ✅ Initialize COM
-    pythoncom.CoInitialize()
-
-    # ✅ Run Excel in the background
-    excel = win32com.client.DispatchEx("Excel.Application")  
-    excel.Visible = False
-    excel.DisplayAlerts = False
-    excel.UserControl = False  
 
     # 🔵 Create a progress bar
     progress_bar = st.progress(0)  # Start progress at 0%
@@ -40,11 +30,12 @@ def process_excel_files(folder_path):
     try:
         for i, file_path in enumerate(excel_files, start=1):
             try:
-                workbook = excel.Workbooks.Open(file_path)
-                workbook.Save()
-                workbook.Close(False)
+                # Read and save the file using pandas
+                df = pd.read_excel(file_path, engine="openpyxl")
+                df.to_excel(file_path, index=False, engine="openpyxl")  # Overwrite the file
+
                 processed_files += 1
-                status_text.text(f"✅ Processed ({i}/{total_files}): {file_path}")
+                status_text.text(f"✅ Processed ({i}/{total_files}): {os.path.basename(file_path)}")
             except Exception as e:
                 st.write(f"❌ Error processing {file_path}: {e}")
 
@@ -53,9 +44,8 @@ def process_excel_files(folder_path):
 
             time.sleep(0.3)  # Small delay for visibility
 
-    finally:
-        excel.Quit()  # Ensure Excel quits properly
-        pythoncom.CoUninitialize()  # ✅ Uninitialize COM after use
+    except Exception as e:
+        return f"❌ Error during processing: {e}"
 
     progress_bar.progress(1.0)  # Ensure progress reaches 100% at the end
     status_text.text("🎯 All files processed successfully!")
@@ -66,7 +56,7 @@ def process_excel_files(folder_path):
 st.set_page_config(page_title="Excel File Processor")
 
 st.title("📂 Excel File Processor with Progress Bar")
-st.write("Enter the folder path where your `.xlsx` files are stored. The script will open and re-save all files.")
+st.write("Enter the folder path where your `.xls/.xlsx` files are stored. The script will open and re-save all files.")
 
 # User input for folder path
 folder_path = st.text_input("Enter folder path:")
